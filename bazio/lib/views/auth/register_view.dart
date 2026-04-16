@@ -3,9 +3,10 @@ import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/input_decoration.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/core/constants/text_styles.dart';
-import 'package:bazio/core/utils.dart/auth_helpers.dart';
-import 'package:bazio/core/utils.dart/validators.dart';
-import 'package:bazio/presentation/viewmodels/auth/auth_notifier.dart';
+import 'package:bazio/core/utils/auth_helpers.dart';
+import 'package:bazio/core/utils/validators.dart';
+import 'package:bazio/viewmodels/auth/auth_notifier.dart';
+import 'package:bazio/viewmodels/auth/auth_ui_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -24,23 +25,21 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
   late final TextEditingController _passwordController;
   late final TextEditingController _confirmController;
 
-  //variables locales pour les inputs
-  String _name     = '';
-  String _email    = '';
+  String _name = '';
+  String _email = '';
   String _password = '';
-  String _confirm  = '';
-
-  //validateur local pour eviter les problemes de timing des providers
+  String _confirm = '';
   bool _isFormValid = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController     = TextEditingController();
-    _emailController    = TextEditingController();
+    _nameController = TextEditingController();
+    _emailController = TextEditingController();
     _passwordController = TextEditingController();
-    _confirmController  = TextEditingController();
+    _confirmController = TextEditingController();
 
+    //on ecoute tous les champs pour valider le formulaire au fur et a mesure
     for (final c in [
       _nameController,
       _emailController,
@@ -50,22 +49,20 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
       c.addListener(_updateFormState);
     }
 
-    //reset du state de chargement au montage
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(registerLoadingProvider.notifier).setValue(false);
     });
   }
 
+  //logique de validation globale basee sur tes utilitaires Validators
   void _updateFormState() {
     setState(() {
-      _name     = _nameController.text.trim();
-      _email    = _emailController.text.trim();
+      _name = _nameController.text.trim();
+      _email = _emailController.text.trim();
       _password = _passwordController.text.trim();
-      _confirm  = _confirmController.text.trim();
+      _confirm = _confirmController.text.trim();
 
-      //check global de validite via le helper
-      _isFormValid =
-          Validators.isValidName(_name) &&
+      _isFormValid = Validators.isValidName(_name) &&
           Validators.isValidEmail(_email) &&
           Validators.isValidPassword(_password) &&
           _confirm == _password;
@@ -83,9 +80,9 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
 
   @override
   Widget build(BuildContext context) {
-    final isObscured        = ref.watch(obscureRegisterPasswordProvider);
+    final isObscured = ref.watch(obscureRegisterPasswordProvider);
     final isConfirmObscured = ref.watch(obscureConfirmPasswordProvider);
-    final isLoading         = ref.watch(registerLoadingProvider);
+    final isLoading = ref.watch(registerLoadingProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgB,
@@ -104,6 +101,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
               ),
               AppSpacing.vExtraLarge,
 
+              //nom complet
               TextFormField(
                 controller: _nameController,
                 style: AppTextStyles.body,
@@ -120,6 +118,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
               ),
               AppSpacing.vLarge,
 
+              //email
               TextFormField(
                 controller: _emailController,
                 style: AppTextStyles.body,
@@ -130,13 +129,15 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
                   label: 'Adresse mail',
                   isEmpty: _email.isEmpty,
                   isValid: Validators.isValidEmail(_email),
-                  errorText: _email.isNotEmpty && !Validators.isValidEmail(_email)
-                      ? 'Adresse email invalide'
-                      : null,
+                  errorText:
+                      _email.isNotEmpty && !Validators.isValidEmail(_email)
+                          ? 'Adresse email invalide'
+                          : null,
                 ),
               ),
               AppSpacing.vLarge,
 
+              //mot de passe avec validation complexe
               TextFormField(
                 controller: _passwordController,
                 obscureText: isObscured,
@@ -168,6 +169,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
               ),
               AppSpacing.vLarge,
 
+              //confirmation du mot de passe
               TextFormField(
                 controller: _confirmController,
                 obscureText: isConfirmObscured,
@@ -199,6 +201,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
               ),
               AppSpacing.vExtraLarge,
 
+              //bouton d'inscription declenchant le mail de verification
               AppButton(
                 text: 'S\'inscrire',
                 isLoading: isLoading,
@@ -212,29 +215,19 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
                                 _passwordController.text.trim(),
                               ),
                           loadingProvider: registerLoadingProvider,
-                          onSuccess: () {
-                            //save de l email pour le notifier avant de partir
-                            ref
-                                .read(pendingVerificationEmailProvider.notifier)
-                                .set(_emailController.text.trim());
-
-                            context.go(
-                              '/verify-email',
-                              extra: _emailController.text.trim(),
-                            );
-                          },
+                          onSuccess: () => context.go('/verify-email'),
                         )
                     : null,
               ),
-
               AppSpacing.vLarge,
 
+              //lien vers la connexion si le user a deja un compte
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text('Déjà un compte? ',
-                      style: AppTextStyles.body
-                          .copyWith(color: AppColors.blackO)),
+                      style:
+                          AppTextStyles.body.copyWith(color: AppColors.blackO)),
                   GestureDetector(
                     onTap: () => context.go('/login'),
                     child: Text('Se connecter',
@@ -245,6 +238,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
               ),
               AppSpacing.vLarge,
 
+              //alternatives de connexion
               const OrDivider(),
               AppSpacing.vLarge,
               const GoogleSignInButton(),
@@ -255,4 +249,3 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
     );
   }
 }
-

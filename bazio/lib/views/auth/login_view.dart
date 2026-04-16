@@ -3,9 +3,9 @@ import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/input_decoration.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/core/constants/text_styles.dart';
-import 'package:bazio/core/utils.dart/auth_helpers.dart';
-import 'package:bazio/presentation/viewmodels/auth/auth_notifier.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:bazio/core/utils/auth_helpers.dart';
+import 'package:bazio/viewmodels/auth/auth_notifier.dart';
+import 'package:bazio/viewmodels/auth/auth_ui_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -25,15 +25,18 @@ class _LoginViewState extends ConsumerState<LoginView> {
   @override
   void initState() {
     super.initState();
-    _emailController    = TextEditingController();
+    _emailController = TextEditingController();
     _passwordController = TextEditingController();
+    
+    //on ecoute les changements pour activer le bouton de connexion
     _emailController.addListener(_updateFormState);
     _passwordController.addListener(_updateFormState);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      //on reset le loading au cas ou
       ref.read(loginLoadingProvider.notifier).setValue(false);
 
-      //affiche le msg de succes venant du flow d inscription
+      //affiche le message de succes venant de EmailVerificationView si besoin
       final msg = ref.read(successMessageProvider);
       if (msg != null) {
         showAppSnackBar(context, message: msg, type: SnackType.success);
@@ -42,11 +45,12 @@ class _LoginViewState extends ConsumerState<LoginView> {
     });
   }
 
+  //on verifie simplement si les champs ne sont pas vides pour le bouton
   void _updateFormState() {
     ref.read(loginFormValidProvider.notifier).setValue(
-      _emailController.text.trim().isNotEmpty &&
-      _passwordController.text.trim().isNotEmpty,
-    );
+          _emailController.text.trim().isNotEmpty &&
+              _passwordController.text.trim().isNotEmpty,
+        );
   }
 
   @override
@@ -58,16 +62,9 @@ class _LoginViewState extends ConsumerState<LoginView> {
 
   @override
   Widget build(BuildContext context) {
-    final isObscured  = ref.watch(obscureLoginPasswordProvider);
+    final isObscured = ref.watch(obscureLoginPasswordProvider);
     final isFormValid = ref.watch(loginFormValidProvider);
-    final isLoading   = ref.watch(loginLoadingProvider);
-
-    //snackbar de succes pour le google sign in
-    ref.listen<User?>(authProvider, (previous, next) {
-      if (previous == null && next != null && context.mounted) {
-        showAppSnackBar(context, message: 'Connexion réussie', type: SnackType.success);
-      }
-    });
+    final isLoading = ref.watch(loginLoadingProvider);
 
     return Scaffold(
       backgroundColor: AppColors.bgB,
@@ -86,6 +83,7 @@ class _LoginViewState extends ConsumerState<LoginView> {
               ),
               AppSpacing.vExtraLarge,
 
+              //champ email
               TextFormField(
                 controller: _emailController,
                 style: AppTextStyles.body,
@@ -98,6 +96,7 @@ class _LoginViewState extends ConsumerState<LoginView> {
               ),
               AppSpacing.vLarge,
 
+              //champ mot de passe
               TextFormField(
                 controller: _passwordController,
                 obscureText: isObscured,
@@ -108,22 +107,22 @@ class _LoginViewState extends ConsumerState<LoginView> {
                   hint: '●●●●●●●●●●',
                   label: 'Mot de passe',
                   suffixIcon: IconButton(
-                    onPressed: () => ref
-                        .read(obscureLoginPasswordProvider.notifier)
-                        .toggle(),
+                    onPressed: () =>
+                        ref.read(obscureLoginPasswordProvider.notifier).toggle(),
                     icon: SvgPicture.asset(
                       isObscured
                           ? 'assets/icones/eye_close.svg'
                           : 'assets/icones/eye_open.svg',
                       width: 24,
-                      colorFilter: const ColorFilter.mode(
-                          Colors.grey, BlendMode.srcIn),
+                      colorFilter:
+                          const ColorFilter.mode(Colors.grey, BlendMode.srcIn),
                     ),
                   ),
                 ),
               ),
               AppSpacing.vExtraLarge,
 
+              //bouton de connexion principale
               AppButton(
                 text: 'Se Connecter',
                 isLoading: isLoading,
@@ -136,19 +135,19 @@ class _LoginViewState extends ConsumerState<LoginView> {
                                 _passwordController.text.trim(),
                               ),
                           loadingProvider: loginLoadingProvider,
-                          successMessage: 'Connexion réussie',
                           onSuccess: () => context.go('/home'),
                         )
                     : null,
               ),
               AppSpacing.vLarge,
 
+              //lien vers l'inscription
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text('Pas encore de compte? ',
-                      style: AppTextStyles.body
-                          .copyWith(color: AppColors.blackO)),
+                      style:
+                          AppTextStyles.body.copyWith(color: AppColors.blackO)),
                   GestureDetector(
                     onTap: () => context.go('/register'),
                     child: Text('S\'inscrire',
@@ -159,6 +158,7 @@ class _LoginViewState extends ConsumerState<LoginView> {
               ),
               AppSpacing.vLarge,
 
+              //separateur et bouton google
               const OrDivider(),
               AppSpacing.vLarge,
               const GoogleSignInButton(),
@@ -169,7 +169,3 @@ class _LoginViewState extends ConsumerState<LoginView> {
     );
   }
 }
-
-
-
-

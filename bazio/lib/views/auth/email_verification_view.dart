@@ -1,9 +1,10 @@
 import 'package:bazio/core/components/button_text.dart';
+import 'package:bazio/core/components/custom_app_bar.dart';
 import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/core/constants/text_styles.dart';
-import 'package:bazio/core/utils.dart/auth_helpers.dart';
-import 'package:bazio/presentation/viewmodels/auth/email_verification_notifier.dart';
+import 'package:bazio/core/utils/auth_helpers.dart';
+import 'package:bazio/viewmodels/auth/email_verification_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -23,9 +24,10 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
   @override
   void initState() {
     super.initState();
+    //on ajoute l'observeur pour surveiller quand l'utilisateur quitte/revient sur l'app
     WidgetsBinding.instance.addObserver(this);
 
-    //polling apres le premier rendu pour eviter les erreurs d init
+    //on lance le polling juste apres le premier build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(emailVerificationProvider.notifier).startPolling();
     });
@@ -37,7 +39,7 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
     super.dispose();
   }
 
-  //check auto quand l user revient sur l app apres avoir clique
+  //on force un check manuel dès que l'app revient au premier plan
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -45,12 +47,13 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
     }
   }
 
+  //on supprime le compte et on retourne a l'inscription si l'utilisateur annule
   Future<void> _cancelAndGoBack() async {
-    //on clean le compte pour pouvoir reutilise l email si besoin
     await ref.read(emailVerificationProvider.notifier).cancelAndDelete();
     if (mounted) context.go('/register');
   }
 
+  //logique de renvoi avec feedback par snackbar
   Future<void> _resendEmail() async {
     final error =
         await ref.read(emailVerificationProvider.notifier).resendEmail();
@@ -70,7 +73,7 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
   Widget build(BuildContext context) {
     final state = ref.watch(emailVerificationProvider);
 
-    //ecoute le changement d etat pour rediriger si verifie
+    //on ecoute le changement d'etat pour rediriger automatiquement vers le login
     ref.listen<VerificationState>(emailVerificationProvider, (_, next) {
       if (next.verified && mounted) {
         context.go('/login');
@@ -80,19 +83,33 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
     return Scaffold(
       backgroundColor: AppColors.bgB,
       body: PopScope(
-        canPop: false,
+        canPop: false,//on empeche le retour arriere swipe/bouton systeme sans passer par notre bouton
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-            child: state.verified
-                ? _buildVerifiedState()
-                : _buildWaitingState(state),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!state.verified)
+                  CustomAppBar(
+                    title: 'Vérification',
+                    onBack: _cancelAndGoBack,
+                  ),
+
+                Expanded(
+                  child: state.verified
+                      ? _buildVerifiedState()
+                      : _buildWaitingState(state),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  //vue affichee une fois que le lien a ete valide
   Widget _buildVerifiedState() {
     return Column(
       children: [
@@ -132,20 +149,10 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
     );
   }
 
+  //vue d'attente avec les instructions et le bouton de renvoi
   Widget _buildWaitingState(VerificationState state) {
     return Column(
       children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: _cancelAndGoBack,
-            icon: const Icon(Icons.arrow_back_ios_new, size: 16),
-            label: const Text('Annuler'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.blackO,
-            ),
-          ),
-        ),
         const Spacer(),
         Container(
           width: 100,
@@ -175,8 +182,7 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
               const TextSpan(text: 'Un lien de vérification a été envoyé à\n'),
               TextSpan(
                 text: widget.email,
-                style: AppTextStyles.bodyBold
-                    .copyWith(color: AppColors.primary),
+                style: AppTextStyles.bodyBold.copyWith(color: AppColors.primary),
               ),
               const TextSpan(
                 text:
@@ -186,6 +192,7 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
           ),
         ),
         const Spacer(),
+        //petit indicateur visuel pour dire que l'app travaille en arriere-plan
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -234,5 +241,3 @@ class _EmailVerificationViewState extends ConsumerState<EmailVerificationView>
     );
   }
 }
-
-

@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:bazio/core/services/auth_service.dart';
-import 'package:bazio/presentation/viewmodels/auth/auth_notifier.dart';
+import 'package:bazio/services/auth_service.dart';
+import 'package:bazio/viewmodels/auth/auth_ui_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+//etat de la verification par email
 class VerificationState {
   final bool verified;
   final bool isResending;
@@ -32,7 +33,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
 
   @override
   VerificationState build() {
-    //les timers sont coupes direct quand le notifier meurt
+    //on securise les fuites memoire en coupant les timers a la destruction
     ref.onDispose(() {
       _pollingTimer?.cancel();
       _cooldownTimer?.cancel();
@@ -40,7 +41,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     return const VerificationState();
   }
 
-  //on check firebase toutes les 10s pour detecter le clic sur le lien
+  //on verifie si l'utilisateur a clique sur le lien toutes les 10s
   void startPolling() {
     _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (state.verified) return;
@@ -48,6 +49,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     });
   }
 
+  //appel a firebase pour recharger les infos du user et voir si c'est bon
   Future<void> checkVerification() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -60,6 +62,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     } catch (_) {}
   }
 
+  //quand c'est verifie, on nettoie tout et on deconnecte pour forcer le login propre
   Future<void> _handleVerified() async {
     if (state.verified) return;
     _pollingTimer?.cancel();
@@ -74,6 +77,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     await FirebaseAuth.instance.signOut();
   }
 
+  //renvoi de l'email avec gestion du cooldown de 30 secondes
   Future<String?> resendEmail() async {
     if (state.isResending || state.resendCooldown > 0) return null;
     state = state.copyWith(isResending: true);
@@ -88,6 +92,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     }
   }
 
+  //decompte seconde par seconde pour l'interface
   void _startCooldown() {
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (state.resendCooldown <= 1) {
@@ -99,6 +104,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     });
   }
 
+  //si l'utilisateur annule, on supprime le compte cree pour pas encombrer firebase
   Future<void> cancelAndDelete() async {
     _pollingTimer?.cancel();
     _cooldownTimer?.cancel();
@@ -114,7 +120,7 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
   }
 }
 
-//autoDispose detruit le notifier et ses timers quand la page est fermee
+//le autoDispose est crucial ici pour stopper tout des que l'utilisateur quitte la page
 final emailVerificationProvider = NotifierProvider.autoDispose<EmailVerificationNotifier, VerificationState>(
   EmailVerificationNotifier.new,
 );

@@ -8,7 +8,7 @@ class AuthService {
 
   Future<void> signUp(String name, String email, String password) async {
     try {
-      //deconnexion google preventive pour eviter les conflits de session
+      //on s'assure qu'aucune session traine avant de creer un compte
       await GoogleSignIn().signOut();
       await _auth.signOut();
 
@@ -20,10 +20,12 @@ class AuthService {
       final user = result.user;
       await user!.updateDisplayName(name);
 
+      //on sauvegarde les infos du user dans notre base de donnees
       await _firestore.collection('users').doc(user.uid).set({
         'name': name,
         'email': email,
         'provider': 'password',
+        'createdAt': FieldValue.serverTimestamp(), 
       });
 
       await user.sendEmailVerification();
@@ -43,7 +45,7 @@ class AuthService {
 
       final user = result.user;
 
-      //on deconnecte direct si l email n est pas valide pour forcer le flow de verif
+      //on bloque la connexion si l'email n'est pas encore valide
       if (user != null && !user.emailVerified) {
         await _auth.signOut();
         throw 'email-not-verified';
@@ -59,8 +61,12 @@ class AuthService {
 
   Future<User?> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) throw 'cancelled';
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        scopes: ['email', 'profile'],
+      );
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) throw 'cancelled';//le gars a ferme la popup
 
       final googleAuth = await googleUser.authentication;
       final credential = GoogleAuthProvider.credential(
@@ -71,19 +77,42 @@ class AuthService {
       final result = await _auth.signInWithCredential(credential);
       final user = result.user!;
 
-      //creation du doc seulement si c est la premiere fois
-      final doc = await _firestore.collection('users').doc(user.uid).get();
+      await user.reload();
+      final refreshedUser = _auth.currentUser!;
+
+      final email = refreshedUser.email ??
+          refreshedUser.providerData.firstOrNull?.email ??
+          googleUser.email;
+
+      final doc = await _firestore.collection('users').doc(refreshedUser.uid).get();
+      
       if (!doc.exists) {
-        await _firestore.collection('users').doc(user.uid).set({
-          'name': user.displayName,
-          'email': user.email,
+        //nouveau compte google, on l'enregistre en base
+        await _firestore.collection('users').doc(refreshedUser.uid).set({
+          'name': refreshedUser.displayName ?? googleUser.displayName,
+          'email': email,
           'provider': 'google',
+          'createdAt': FieldValue.serverTimestamp(), 
         });
+      } else {
+        final updates = <String, dynamic>{};
+        if (doc.data()?['email'] == null) {
+          updates['email'] = email;
+        }
+        //retrocompatibilite : ajoute createdAt si c'etait pas fait a l'epoque
+        if (doc.data()?['createdAt'] == null) {
+          updates['createdAt'] = FieldValue.serverTimestamp();
+        }
+        
+        //on met a jour seulement s'il manque des trucs
+        if (updates.isNotEmpty) {
+          await _firestore.collection('users').doc(refreshedUser.uid).update(updates);
+        }
       }
 
-      return user;
+      return refreshedUser;
     } on FirebaseAuthException catch (e) {
-      await GoogleSignIn().signOut();
+      await GoogleSignIn().signOut();//on clean la session google en cas d'erreur
       throw e.code;
     } catch (e) {
       throw e.toString();
@@ -95,7 +124,6 @@ class AuthService {
       final user = _auth.currentUser;
       if (user == null) throw 'no-current-user';
 
-      //reload obligatoire pour rafraichir le cache firebase
       await user.reload();
       final refreshed = _auth.currentUser;
 
