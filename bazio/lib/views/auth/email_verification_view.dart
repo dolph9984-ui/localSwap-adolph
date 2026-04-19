@@ -1,9 +1,9 @@
-import 'package:bazio/core/components/button_text.dart';
-import 'package:bazio/core/components/custom_app_bar.dart';
+import 'package:bazio/core/components/app_button.dart';
+import 'package:bazio/core/components/app_bar.dart';
 import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/core/constants/text_styles.dart';
-import 'package:bazio/core/utils/auth_helpers.dart';
+import 'package:bazio/core/components/auth_helpers.dart';
 import 'package:bazio/viewmodels/auth/email_verification_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

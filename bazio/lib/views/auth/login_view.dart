@@ -1,9 +1,9 @@
-import 'package:bazio/core/components/button_text.dart';
+import 'package:bazio/core/components/app_button.dart';
 import 'package:bazio/core/constants/colors.dart';
-import 'package:bazio/core/constants/input_decoration.dart';
+import 'package:bazio/core/components/input_decoration.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/core/constants/text_styles.dart';
-import 'package:bazio/core/utils/auth_helpers.dart';
+import 'package:bazio/core/components/auth_helpers.dart';
 import 'package:bazio/viewmodels/auth/auth_notifier.dart';
 import 'package:bazio/viewmodels/auth/auth_ui_provider.dart';
 import 'package:flutter/material.dart';
