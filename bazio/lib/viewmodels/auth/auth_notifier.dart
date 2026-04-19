@@ -1,52 +1,56 @@
-import 'package:bazio/services/auth_service.dart';
-import 'package:bazio/services/local_service.dart';
-import 'package:bazio/services/notification_service.dart';
+import 'package:bazio/core/utils/error_helpers.dart';
+import 'package:bazio/services/auth/auth_service.dart';
+import 'package:bazio/services/notification/notification_service.dart';
+import 'package:bazio/viewmodels/listing/favorites_notifier.dart';
 import 'package:bazio/viewmodels/auth/auth_ui_provider.dart';
-import 'package:bazio/viewmodels/listing_notifier.dart';
-import 'package:bazio/viewmodels/user_location_notifier.dart';
+import 'package:bazio/viewmodels/listing/listing_providers.dart';
+import 'package:bazio/viewmodels/location/user_location_notifier.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-//gestion de l'etat d'authentification global de l'app
+//le provider pour l'auth pour rester coherent avec les autres services
+final authServiceProvider = Provider<AuthService>((_) => AuthService());
+
+//on gere ici l'etat de connexion de toute l'appli
 class AuthNotifier extends Notifier<User?> {
   late final AuthService _authService;
 
   @override
   User? build() {
-    _authService = AuthService();
-    //on ecoute les changements d'etat de firebase en temps reel
+    _authService = ref.read(authServiceProvider);
+    //on surveille firebase en direct pour savoir si l'utilisateur change
     final sub = FirebaseAuth.instance.userChanges().listen((user) {
       state = user;
     });
-    //on nettoie l'ecouteur quand le provider est detruit
+    //on annule l'abonnement quand on quitte pour eviter les fuites de memoire
     ref.onDispose(() => sub.cancel());
     return _authService.getCurrentUser();
   }
 
-  //creation de compte classique
+  //inscription classique avec mail et mdp
   Future<void> signUp(String name, String email, String password) async {
     try {
       await _authService.signUp(name, email, password);
-      //on stocke l'email pour l'afficher sur la page de verification
+      //on retient le mail pour le mettre sur l'ecran de validation juste apres
       ref.read(pendingVerificationEmailProvider.notifier).set(email);
     } catch (e) {
-      throw _mapError(e);
+      throw humanizeError(e);
     }
   }
 
-  //connexion par email/password
+  //connexion par mail
   Future<void> signIn(String email, String password) async {
     try {
       state = await _authService.signIn(email, password);
       _invalidateUserProviders();
-      //on enregistre le token de notification pour ce nouvel utilisateur
+      //on lie le token de notif au compte qui vient de se connecter
       NotificationService.saveTokenForCurrentUser();
     } catch (e) {
-      throw _mapError(e);
+      throw humanizeError(e);
     }
   }
 
-  //connexion via le compte google
+  //connexion via google
   Future<void> signInWithGoogle() async {
     try {
       final user = await _authService.signInWithGoogle();
@@ -56,22 +60,20 @@ class AuthNotifier extends Notifier<User?> {
       NotificationService.saveTokenForCurrentUser();
     } catch (e) {
       if (e.toString() == 'cancelled') rethrow;
-      throw _mapError(e);
+      throw humanizeError(e);
     }
   }
 
-  //deconnexion propre du compte
+  //on deconnecte le compte proprement
   Future<void> logOut() async {
-    //on vire le token FCM pour ne plus recevoir de notifications
+    //on supprime le token pour plus recevoir de notifs une fois deco
     await NotificationService.clearToken();
-    //deconnexion de firebase
     await _authService.logOut();
     state = null;
-    //on reset tous les providers lies a l'utilisateur
     _invalidateUserProviders();
   }
 
-  //on force le rafraichissement des donnees liees a l'utilisateur
+  //on reset les infos de l'utilisateur pour que le prochain ne voit pas les anciennes donnees
   void _invalidateUserProviders() {
     ref.invalidate(userLocationProvider);
     ref.invalidate(recentListingsProvider);
@@ -81,25 +83,3 @@ class AuthNotifier extends Notifier<User?> {
 }
 
 final authProvider = NotifierProvider<AuthNotifier, User?>(AuthNotifier.new);
-
-//on transforme les codes erreurs techniques en phrases comprehensibles
-String _mapError(dynamic e) {
-  switch (e.toString()) {
-    case 'invalid-credential':
-      return 'Email ou mot de passe incorrect';
-    case 'email-already-in-use':
-      return 'Un compte existe déjà avec cet email';
-    case 'weak-password':
-      return 'Le mot de passe est trop court';
-    case 'network-request-failed':
-      return 'Pas de connexion internet';
-    case 'too-many-requests':
-      return 'Trop de tentatives, réessayez plus tard';
-    case 'invalid-email':
-      return 'Adresse email invalide';
-    case 'email-not-verified':
-      return 'Veuillez vérifier votre email avant de vous connecter';
-    default:
-      return 'Une erreur est survenue';
-  }
-}

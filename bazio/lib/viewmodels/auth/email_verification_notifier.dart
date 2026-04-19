@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'package:bazio/services/auth_service.dart';
+import 'package:bazio/services/auth/auth_service.dart';
+import 'package:bazio/viewmodels/auth/auth_notifier.dart';
 import 'package:bazio/viewmodels/auth/auth_ui_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 //etat de la verification par email
 class VerificationState {
@@ -27,12 +26,13 @@ class VerificationState {
 }
 
 class EmailVerificationNotifier extends Notifier<VerificationState> {
-  final _authService = AuthService();
+  late final AuthService _authService;
   Timer? _pollingTimer;
   Timer? _cooldownTimer;
 
   @override
   VerificationState build() {
+    _authService = ref.read(authServiceProvider);
     //on securise les fuites memoire en coupant les timers a la destruction
     ref.onDispose(() {
       _pollingTimer?.cancel();
@@ -49,14 +49,11 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     });
   }
 
-  //appel a firebase pour recharger les infos du user et voir si c'est bon
+  //appel a AuthService pour recharger les infos du user et voir si c'est bon
   Future<void> checkVerification() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-      await user.reload();
-      final refreshed = FirebaseAuth.instance.currentUser;
-      if (refreshed != null && refreshed.emailVerified) {
+      final isVerified = await _authService.reloadAndCheckVerified();
+      if (isVerified) {
         await _handleVerified();
       }
     } catch (_) {}
@@ -73,8 +70,8 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
     );
 
     state = state.copyWith(verified: true);
-    await GoogleSignIn().signOut();
-    await FirebaseAuth.instance.signOut();
+    // delegue la deconnexion a AuthService qui gere Google + Firebase
+    await _authService.logOut();
   }
 
   //renvoi de l'email avec gestion du cooldown de 30 secondes
@@ -108,15 +105,9 @@ class EmailVerificationNotifier extends Notifier<VerificationState> {
   Future<void> cancelAndDelete() async {
     _pollingTimer?.cancel();
     _cooldownTimer?.cancel();
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      await user?.delete();
-      await GoogleSignIn().signOut();
-      await FirebaseAuth.instance.signOut();
-    } catch (e) {
-      await GoogleSignIn().signOut();
-      await FirebaseAuth.instance.signOut();
-    }
+    // delegue à AuthService — plus de FirebaseAuth.instance direct dans le notifier
+    await _authService.deleteCurrentUser();
+    await _authService.logOut();
   }
 }
 
