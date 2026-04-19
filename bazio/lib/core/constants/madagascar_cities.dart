@@ -1,4 +1,4 @@
-/// 📍 Liste des villes de Madagascar
+//liste des villes de Madagascar
 const List<String> madagascarCities = [
   'Antananarivo',
   'Toamasina',
