@@ -33,6 +33,7 @@ class ChatService {
   }
 
   //ouvre un chat existant ou en cree un nouveau pour une annonce
+  //on filtre cote client pour eviter les index composites manquants dans firebase
   Future<String> getOrCreateChat({
     required String currentUserId,
     required String sellerId,
@@ -42,10 +43,15 @@ class ChatService {
     final query = await _firestore
         .collection('chats')
         .where('participants', arrayContains: currentUserId)
-        .where('listingId', isEqualTo: listingId)
         .get();
 
-    if (query.docs.isNotEmpty) return query.docs.first.id;
+    final existing = query.docs.where((doc) {
+      final data = doc.data();
+      return data['listingId'] == listingId &&
+          data['sellerId'] == sellerId;
+    }).toList();
+
+    if (existing.isNotEmpty) return existing.first.id;
 
     final doc = await _firestore.collection('chats').add({
       'participants': [currentUserId, sellerId],

@@ -192,11 +192,15 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/filters', builder: (_, __) => const FilterView()),
 
     //la messagerie privee
+    //le titre est passe via extra (String) pour eviter les problemes d'encodage URI
+    //avec les caracteres speciaux (accents, cedille, etc.)
     GoRoute(
       path: '/messages/:chatId',
       builder: (context, state) {
         final chatId = state.pathParameters['chatId']!;
-        final listingTitle = Uri.decodeComponent(state.uri.queryParameters['listingTitle'] ?? 'Discussion');
+        final listingTitle = state.extra is String
+            ? state.extra as String
+            : 'Discussion';
         return MessageView(chatId: chatId, listingTitle: listingTitle);
       },
     ),

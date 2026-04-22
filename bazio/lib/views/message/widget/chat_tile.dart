@@ -27,9 +27,10 @@ class ChatTile extends StatelessWidget {
     final initials = buildInitials(name);
 
     return InkWell(
+      //on passe le titre via extra pour eviter les problemes d'encodage URI
       onTap: () => context.push(
-        '/messages/${chat.id}'
-        '?listingTitle=${Uri.encodeComponent(chat.listingTitle)}',
+        '/messages/${chat.id}',
+        extra: chat.listingTitle,
       ),
       borderRadius: BorderRadius.circular(18),
       child: Container(

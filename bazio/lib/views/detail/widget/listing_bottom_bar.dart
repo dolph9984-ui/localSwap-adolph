@@ -127,8 +127,10 @@ class _OfferSheetState extends ConsumerState<_OfferSheet> {
           message: 'Offre de ${amount.toInt()} Ar envoyée !',
           type: SnackType.success,
         );
+        //on passe le titre via extra pour eviter les problemes d'encodage URI
         context.push(
-          '/messages/$chatId?listingTitle=${Uri.encodeComponent(widget.listing.title)}',
+          '/messages/$chatId',
+          extra: widget.listing.title,
         );
       }
     } catch (e) {
@@ -300,8 +302,10 @@ class _ChatButtonState extends ConsumerState<_ChatButton> {
                       listingTitle: widget.listing.title,
                     );
                 if (mounted) {
+                  //on passe le titre via extra pour eviter les problemes d'encodage URI
                   context.push(
-                    '/messages/$chatId?listingTitle=${Uri.encodeComponent(widget.listing.title)}',
+                    '/messages/$chatId',
+                    extra: widget.listing.title,
                   );
                 }
               } catch (e) {
