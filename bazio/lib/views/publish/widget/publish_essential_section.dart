@@ -2,7 +2,6 @@ import 'package:bazio/core/components/input_decoration.dart';
 import 'package:bazio/core/constants/listing_constants.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/core/constants/text_styles.dart';
-import 'package:bazio/core/constants/colors.dart';
 import 'package:flutter/material.dart';
 
 class PublishEssentialSection extends StatefulWidget {

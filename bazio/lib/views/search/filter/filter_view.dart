@@ -3,7 +3,6 @@ import 'package:bazio/core/components/app_bar.dart';
 import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/viewmodels/search/search_state.dart';
-import 'package:bazio/viewmodels/listing/listing_providers.dart';
 import 'package:bazio/viewmodels/search/search_notifier.dart';
 import 'package:bazio/viewmodels/location/user_location_notifier.dart';
 import 'package:bazio/views/search/filter/widget/filter_category_section.dart';

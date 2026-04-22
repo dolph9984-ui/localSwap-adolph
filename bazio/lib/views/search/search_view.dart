@@ -4,7 +4,6 @@ import 'package:bazio/core/constants/text_styles.dart';
 import 'package:bazio/viewmodels/search/search_state.dart';
 import 'package:bazio/viewmodels/search/search_history_notifier.dart';
 import 'package:bazio/viewmodels/search/search_notifier.dart';
-import 'package:bazio/views/search/widget/all_listings_from_search.dart';
 import 'package:bazio/views/search/widget/search_bar_widget.dart';
 import 'package:bazio/views/search/widget/search_history_widget.dart';
 import 'package:bazio/views/search/widget/search_results_grid.dart';

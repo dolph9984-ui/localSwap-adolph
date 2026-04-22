@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/text_styles.dart';
 import 'package:bazio/viewmodels/publish/publish_state.dart';
-import 'package:bazio/viewmodels/publish/publish_notifier.dart';
 import 'package:flutter/material.dart';
 
 //overlay semi-transparent affiche pendant l'envoi des photos

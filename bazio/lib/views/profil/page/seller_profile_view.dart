@@ -2,8 +2,6 @@ import 'package:bazio/core/components/app_tab_bar.dart';
 import 'package:bazio/core/components/app_bar.dart';
 import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/spacing.dart';
-import 'package:bazio/core/constants/text_styles.dart';
-import 'package:bazio/viewmodels/auth/auth_notifier.dart';
 import 'package:bazio/viewmodels/review/review_notifier.dart';
 import 'package:bazio/viewmodels/listing/seller_provider.dart';
 import 'package:bazio/views/profil/page/widget/listing_tab.dart';

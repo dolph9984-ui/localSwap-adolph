@@ -1,4 +1,3 @@
-import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/core/constants/text_styles.dart';
 import 'package:flutter/material.dart';
 
