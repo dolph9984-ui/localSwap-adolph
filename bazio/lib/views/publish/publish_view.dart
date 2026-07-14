@@ -1,4 +1,3 @@
-import 'package:bazio/core/components/app_snack_bar.dart';
 import 'package:bazio/core/components/app_button.dart';
 import 'package:bazio/core/components/confirm_dialog.dart';
 import 'package:bazio/core/components/app_bar.dart';
@@ -17,11 +16,12 @@ import 'package:bazio/views/publish/widget/publish_location_section.dart';
 import 'package:bazio/views/publish/widget/publish_upload_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:bazio/core/router/main_wrapper.dart';
 import 'package:go_router/go_router.dart';
 
 class PublishView extends ConsumerStatefulWidget {
   final ListingModel? existingListing;
-  final DraftModel? draftToLoad; //passe depuis DraftView via extra
+  final DraftModel? draftToLoad;
   const PublishView({super.key, this.existingListing, this.draftToLoad});
 
   @override
@@ -36,13 +36,12 @@ class _PublishViewState extends ConsumerState<PublishView> {
   final _modelController = TextEditingController();
   final _sizeController = TextEditingController();
   final _colorController = TextEditingController();
-  final _cityController = TextEditingController();
 
   String? _selectedCategory;
   String? _selectedCondition;
   bool _showMoreDetails = false;
 
-  //brouillon en cours d'edition null si nouvelle annonce fraiche
+  // brouillon en cours d'edition, null si nouvelle annonce fraiche
   DraftModel? _editingDraft;
 
   @override
@@ -51,7 +50,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
     final listing = widget.existingListing;
 
     if (listing != null) {
-      //mode edition on prefill les champs avec l'annonce existante
+      // mode edition : on prefill les champs avec l'annonce existante
       _titleController.text = listing.title;
       _priceController.text = listing.price.toStringAsFixed(0);
       _descriptionController.text = listing.description;
@@ -59,7 +58,6 @@ class _PublishViewState extends ConsumerState<PublishView> {
       _modelController.text = listing.modelName ?? '';
       _sizeController.text = listing.size ?? '';
       _colorController.text = listing.color ?? '';
-      _cityController.text = listing.city;
       _selectedCategory = listing.category;
       _selectedCondition = listing.condition;
       _showMoreDetails = [
@@ -75,7 +73,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (widget.draftToLoad != null) {
-          //vient de DraftView on charge directement sans dialog
+          // vient de DraftView on charge directement sans dialog
           _editingDraft = widget.draftToLoad;
           _loadDraftIntoForm(widget.draftToLoad!);
         } else {
@@ -85,7 +83,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
     }
   }
 
-  //propose de reprendre le brouillon le plus recent si un existe
+  // propose de reprendre le brouillon le plus recent si un existe
   Future<void> _checkAndOfferDraft() async {
     final drafts = ref.read(draftProvider);
     if (drafts.isEmpty || !mounted) return;
@@ -108,16 +106,16 @@ class _PublishViewState extends ConsumerState<PublishView> {
               children: [
                 Text(
                   draft.title.isNotEmpty ? draft.title : 'Sans titre',
-                  style: AppTextStyles.bodyBold
-                      .copyWith(color: AppColors.blackB),
+                  style:
+                      AppTextStyles.bodyBold.copyWith(color: AppColors.blackB),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (draft.price != null)
                   Text(
                     '${draft.price!.toInt()} Ar',
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.primary),
+                    style:
+                        AppTextStyles.caption.copyWith(color: AppColors.primary),
                   ),
               ],
             ),
@@ -129,8 +127,8 @@ class _PublishViewState extends ConsumerState<PublishView> {
     final resumeResult = await AppChoiceDialog.show(
       context,
       icon: Icons.edit_note_rounded,
-      title: 'Brouillon sauvegardé',
-      message: 'Tu as un brouillon non publié :',
+      title: 'Brouillon sauvegarde',
+      message: 'Tu as un brouillon non publie :',
       content: draftPreview,
       barrierDismissible: false,
       actions: [
@@ -163,20 +161,20 @@ class _PublishViewState extends ConsumerState<PublishView> {
       _modelController.text = draft.modelName ?? '';
       _sizeController.text = draft.size ?? '';
       _colorController.text = draft.color ?? '';
-      _cityController.text = draft.city ?? '';
       _selectedCategory = draft.category;
       _selectedCondition = draft.condition;
       _showMoreDetails = [draft.brand, draft.modelName, draft.size, draft.color]
           .any((v) => v != null && v.isNotEmpty);
     });
 
-    //on restaure aussi les images locales et le GPS dans le provider
+    // on restaure les images locales et la localisation depuis le brouillon
+    // la ville est celle qui avait ete deduite du GPS lors de la sauvegarde
     ref.read(publishProvider.notifier).restoreFromDraft(
-      imagePaths: draft.imagePaths,
-      latitude: draft.latitude,
-      longitude: draft.longitude,
-      city: draft.city,
-    );
+          imagePaths: draft.imagePaths,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+          city: draft.city,
+        );
   }
 
   @override
@@ -188,7 +186,6 @@ class _PublishViewState extends ConsumerState<PublishView> {
     _modelController.dispose();
     _sizeController.dispose();
     _colorController.dispose();
-    _cityController.dispose();
     super.dispose();
   }
 
@@ -196,10 +193,10 @@ class _PublishViewState extends ConsumerState<PublishView> {
     if (!mounted) return;
     final publishState = ref.read(publishProvider);
 
-    //on bloque le retour pendant un upload en cours
+    // on bloque le retour pendant un upload en cours
     if (publishState.isLoading) return;
 
-    //on capture la city avant que autoDispose ne detruise le state
+    // on capture la city avant que autoDispose ne detruise le state
     final currentCity = publishState.city;
 
     final hasContent = _titleController.text.isNotEmpty ||
@@ -209,18 +206,19 @@ class _PublishViewState extends ConsumerState<PublishView> {
         publishState.city != null ||
         publishState.position != null;
 
-    //formulaire vide on quitte directement
+    // formulaire vide on quitte directement
     if (!hasContent) {
+      ref.read(navigationIndexProvider.notifier).setIndex(0);
       context.go('/home');
       return;
     }
 
-    //formulaire rempli on propose de sauvegarder en brouillon ou quitter
+    // formulaire rempli on propose de sauvegarder en brouillon ou quitter
     final result = await AppChoiceDialog.show(
       context,
       icon: Icons.help_outline_rounded,
       title: 'Que veux-tu faire ?',
-      message: "Ton annonce n'est pas encore publiée.",
+      message: "Ton annonce n'est pas encore publiee.",
       actions: [
         AppDialogAction(
           label: 'Quitter sans sauvegarder',
@@ -236,7 +234,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
       ],
     );
 
-    //null signifie que l'utilisateur a ferme le dialog on reste sur la page
+    // null signifie que l'utilisateur a ferme le dialog on reste sur la page
     if (!mounted || result == null) return;
 
     if (result == 'draft') {
@@ -245,64 +243,62 @@ class _PublishViewState extends ConsumerState<PublishView> {
       if (_editingDraft != null) {
         await notifier.updateDraft(
           _editingDraft!,
-            title: _titleController.text.trim(),
-            description: _descriptionController.text.trim(),
-            price: double.tryParse(
-                _priceController.text.replaceAll(',', '.')),
-            category: _selectedCategory,
-            condition: _selectedCondition,
-            city: currentCity,
-            brand: _brandController.text.isEmpty
-                ? null
-                : _brandController.text,
-            modelName: _modelController.text.isEmpty
-                ? null
-                : _modelController.text,
-            size: _sizeController.text.isEmpty
-                ? null
-                : _sizeController.text,
-            color: _colorController.text.isEmpty
-                ? null
-                : _colorController.text,
-            imagePaths: publishState2.imageItems
-                .map((e) => e.file.path)
-                .toList(),
-            latitude: publishState2.position?.latitude,
-            longitude: publishState2.position?.longitude,
-          );
-        } else {
-          await notifier.saveDraft(
-            title: _titleController.text.trim(),
-            description: _descriptionController.text.trim(),
-            price: double.tryParse(
-                _priceController.text.replaceAll(',', '.')),
-            category: _selectedCategory,
-            condition: _selectedCondition,
-            city: currentCity,
-            brand: _brandController.text.isEmpty ? null : _brandController.text,
-            modelName: _modelController.text.isEmpty ? null : _modelController.text,
-            size: _sizeController.text.isEmpty ? null : _sizeController.text,
-            color: _colorController.text.isEmpty ? null : _colorController.text,
-            imagePaths: publishState2.imageItems.map((e) => e.file.path).toList(),
-            latitude: publishState2.position?.latitude,
-            longitude: publishState2.position?.longitude,
-          );
-        }
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          price: double.tryParse(_priceController.text.replaceAll(',', '.')),
+          category: _selectedCategory,
+          condition: _selectedCondition,
+          city: currentCity,
+          brand:
+              _brandController.text.isEmpty ? null : _brandController.text,
+          modelName:
+              _modelController.text.isEmpty ? null : _modelController.text,
+          size: _sizeController.text.isEmpty ? null : _sizeController.text,
+          color:
+              _colorController.text.isEmpty ? null : _colorController.text,
+          imagePaths:
+              publishState2.imageItems.map((e) => e.file.path).toList(),
+          latitude: publishState2.position?.latitude,
+          longitude: publishState2.position?.longitude,
+        );
+      } else {
+        await notifier.saveDraft(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          price: double.tryParse(_priceController.text.replaceAll(',', '.')),
+          category: _selectedCategory,
+          condition: _selectedCondition,
+          city: currentCity,
+          brand:
+              _brandController.text.isEmpty ? null : _brandController.text,
+          modelName:
+              _modelController.text.isEmpty ? null : _modelController.text,
+          size: _sizeController.text.isEmpty ? null : _sizeController.text,
+          color:
+              _colorController.text.isEmpty ? null : _colorController.text,
+          imagePaths:
+              publishState2.imageItems.map((e) => e.file.path).toList(),
+          latitude: publishState2.position?.latitude,
+          longitude: publishState2.position?.longitude,
+        );
+      }
 
       if (mounted) {
         showAppSnackBar(
           context,
-          message: 'Brouillon sauvegardé',
+          message: 'Brouillon sauvegarde',
           type: SnackType.success,
         );
+        ref.read(navigationIndexProvider.notifier).setIndex(0);
         context.go('/home');
       }
     } else if (result == 'discard') {
-      //on supprime uniquement le brouillon en cours les autres restent intacts
+      // on supprime uniquement le brouillon en cours les autres restent intacts
       if (_editingDraft != null) {
         await ref.read(draftProvider.notifier).deleteDraft(_editingDraft!);
       }
-      if (mounted) context.go('/home');
+      if (mounted) ref.read(navigationIndexProvider.notifier).setIndex(0);
+      context.go('/home');
     }
   }
 
@@ -310,7 +306,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
     final double? price =
         double.tryParse(_priceController.text.replaceAll(',', '.'));
 
-    //validations avant publication
+    // validations avant publication
     if (_titleController.text.trim().isEmpty) {
       showAppSnackBar(context,
           message: 'Le titre est requis', type: SnackType.error);
@@ -323,14 +319,13 @@ class _PublishViewState extends ConsumerState<PublishView> {
     }
     if (ref.read(publishProvider).city == null) {
       showAppSnackBar(context,
-          message: 'Veuillez sélectionner une ville',
+          message: 'Appuie sur "Me localiser" pour detecter ta ville',
           type: SnackType.error);
       return;
     }
     if (_selectedCategory == null || _selectedCondition == null) {
       showAppSnackBar(context,
-          message: 'Catégorie et état obligatoires',
-          type: SnackType.error);
+          message: 'Categorie et etat obligatoires', type: SnackType.error);
       return;
     }
 
@@ -347,15 +342,13 @@ class _PublishViewState extends ConsumerState<PublishView> {
             modelName: _modelController.text.isEmpty
                 ? null
                 : _modelController.text,
-            size: _sizeController.text.isEmpty
-                ? null
-                : _sizeController.text,
-            color: _colorController.text.isEmpty
-                ? null
-                : _colorController.text,
+            size:
+                _sizeController.text.isEmpty ? null : _sizeController.text,
+            color:
+                _colorController.text.isEmpty ? null : _colorController.text,
           );
 
-      //publication reussie on supprime uniquement le brouillon en cours
+      // publication reussie on supprime uniquement le brouillon en cours
       if (_editingDraft != null) {
         await ref.read(draftProvider.notifier).deleteDraft(_editingDraft!);
       }
@@ -365,10 +358,11 @@ class _PublishViewState extends ConsumerState<PublishView> {
         showAppSnackBar(
           context,
           message: isEditing
-              ? 'Annonce modifiée avec succès !'
-              : 'Annonce publiée avec succès !',
+              ? 'Annonce modifiee avec succes !'
+              : 'Annonce publiee avec succes !',
           type: SnackType.success,
         );
+        ref.read(navigationIndexProvider.notifier).setIndex(0);
         context.go('/home');
       }
     } catch (e) {
@@ -401,7 +395,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
                   children: [
                     CustomAppBar(
                       title: isEditing
-                          ? 'Modifier l\'annonce'
+                          ? "Modifier l'annonce"
                           : 'Publier une annonce',
                       subtitle: 'Les champs avec * sont obligatoires',
                       onBack: _handleBack,
@@ -423,8 +417,8 @@ class _PublishViewState extends ConsumerState<PublishView> {
                     ),
                     AppSpacing.vLarge,
 
-                    PublishLocationSection(
-                        cityController: _cityController),
+                    // plus de cityController : la ville vient du GPS automatiquement
+                    const PublishLocationSection(),
                     AppSpacing.vLarge,
 
                     PublishDescriptionSection(
@@ -441,7 +435,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
                       text: isEditing
                           ? 'Enregistrer les modifications'
                           : 'Publier maintenant',
-                      //pas de spinner si l'upload est en cours il a son propre overlay
+                      // pas de spinner si l'upload est en cours il a son propre overlay
                       isLoading: state.isLoading && !state.isUploading,
                       onPressed: state.isLoading ? null : _publish,
                     ),
@@ -450,7 +444,7 @@ class _PublishViewState extends ConsumerState<PublishView> {
               ),
             ),
 
-            //overlay d'upload affiché par dessus tout pendant l'envoi des photos
+            // overlay d'upload affiche par dessus tout pendant l'envoi des photos
             if (state.isUploading)
               PublishUploadOverlay(imageItems: state.imageItems),
           ],

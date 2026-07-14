@@ -1,3 +1,4 @@
+import 'package:bazio/core/router/main_wrapper.dart';
 import 'package:bazio/core/utils/error_helpers.dart';
 import 'package:bazio/services/auth/auth_service.dart';
 import 'package:bazio/services/notification/notification_service.dart';
@@ -21,6 +22,11 @@ class AuthNotifier extends Notifier<User?> {
     //on surveille firebase en direct pour savoir si l'utilisateur change
     final sub = FirebaseAuth.instance.userChanges().listen((user) {
       state = user;
+      //si l'utilisateur est connecte (session persistante ou nouvelle connexion),
+      //on sauvegarde le token fcm → corrige le cas ou init() est appele avant auth
+      if (user != null) {
+        NotificationService.saveTokenForCurrentUser();
+      }
     });
     //on annule l'abonnement quand on quitte pour eviter les fuites de memoire
     ref.onDispose(() => sub.cancel());
@@ -43,8 +49,8 @@ class AuthNotifier extends Notifier<User?> {
     try {
       state = await _authService.signIn(email, password);
       _invalidateUserProviders();
-      //on lie le token de notif au compte qui vient de se connecter
-      NotificationService.saveTokenForCurrentUser();
+      ref.read(navigationIndexProvider.notifier).setIndex(0);
+      //le token est sauvegarde automatiquement via le listener userChanges
     } catch (e) {
       throw humanizeError(e);
     }
@@ -57,7 +63,8 @@ class AuthNotifier extends Notifier<User?> {
       if (user == null) throw 'cancelled';
       state = user;
       _invalidateUserProviders();
-      NotificationService.saveTokenForCurrentUser();
+      ref.read(navigationIndexProvider.notifier).setIndex(0);
+      //le token est sauvegarde automatiquement via le listener userChanges
     } catch (e) {
       if (e.toString() == 'cancelled') rethrow;
       throw humanizeError(e);

@@ -41,13 +41,13 @@ class _ListingDetailViewState extends ConsumerState<ListingDetailView> {
 
     return listingAsync.when(
       loading: () => const Scaffold(
-        backgroundColor: AppColors.bgO,
+        backgroundColor: AppColors.bgB,
         body: Center(
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       ),
       error: (e, _) => Scaffold(
-        backgroundColor: AppColors.bgO,
+        backgroundColor: AppColors.bgB,
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -57,7 +57,7 @@ class _ListingDetailViewState extends ConsumerState<ListingDetailView> {
                 Icon(
                   Icons.wifi_off_rounded,
                   size: 48,
-                  color: AppColors.grisNeutre.withOpacity(0.4),
+                  color: AppColors.grisNeutre.withValues(alpha: 0.4),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -210,7 +210,7 @@ class _ListingDetailViewState extends ConsumerState<ListingDetailView> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.bgO.withOpacity(0.9),
+              color: AppColors.bgO.withValues(alpha: 0.9),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -232,7 +232,7 @@ class _ListingDetailViewState extends ConsumerState<ListingDetailView> {
             height: 40,
             margin: const EdgeInsets.only(right: 8),
             decoration: BoxDecoration(
-              color: AppColors.bgO.withOpacity(0.9),
+              color: AppColors.bgO.withValues(alpha: 0.9),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -260,7 +260,7 @@ class _ListingDetailViewState extends ConsumerState<ListingDetailView> {
                 height: 40,
                 margin: const EdgeInsets.only(right: 16),
                 decoration: BoxDecoration(
-                  color: AppColors.bgO.withOpacity(0.9),
+                  color: AppColors.bgO.withValues(alpha: 0.9),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -287,7 +287,7 @@ class _OwnerMenu extends ConsumerWidget {
       height: 40,
       margin: const EdgeInsets.only(right: 16),
       decoration: BoxDecoration(
-        color: AppColors.bgO.withOpacity(0.9),
+        color: AppColors.bgO.withValues(alpha: 0.9),
         shape: BoxShape.circle,
       ),
       child: PopupMenuButton<_OwnerAction>(
@@ -363,36 +363,29 @@ class _OwnerMenu extends ConsumerWidget {
         },
         itemBuilder: (_) => [
           PopupMenuItem(
-            value: _OwnerAction.edit,
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.edit_outlined,
-                  color: AppColors.primary,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Modifier',
-                  style: AppTextStyles.body.copyWith(color: AppColors.blackOp),
-                ),
-              ],
-            ),
-          ),
-          PopupMenuItem(
             value: _OwnerAction.markSold,
             child: Row(
               children: [
                 Icon(
-                  listing.isSold ? Icons.refresh : Icons.check_circle_outline,
-                  color: Colors.green,
+                  listing.isSold ? Icons.refresh_rounded : Icons.check_circle_outline_rounded,
+                  color: Colors.green.shade600,
                   size: 20,
                 ),
                 const SizedBox(width: 12),
                 Text(
                   listing.isSold ? 'Remettre en vente' : 'Marquer comme vendu',
-                  style: AppTextStyles.body.copyWith(color: AppColors.blackOp),
+                  style: AppTextStyles.body.copyWith(color: AppColors.blackB),
                 ),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: _OwnerAction.edit,
+            child: Row(
+              children: [
+                const Icon(Icons.edit_outlined, color: AppColors.bleu, size: 20),
+                const SizedBox(width: 12),
+                Text('Modifier', style: AppTextStyles.body.copyWith(color: AppColors.blackB)),
               ],
             ),
           ),
@@ -400,16 +393,9 @@ class _OwnerMenu extends ConsumerWidget {
             value: _OwnerAction.delete,
             child: Row(
               children: [
-                const Icon(
-                  Icons.delete_outline,
-                  color: AppColors.rouge,
-                  size: 20,
-                ),
+                const Icon(Icons.delete_outline_rounded, color: AppColors.rouge, size: 20),
                 const SizedBox(width: 12),
-                Text(
-                  'Supprimer',
-                  style: AppTextStyles.body.copyWith(color: AppColors.rouge),
-                ),
+                Text('Supprimer', style: AppTextStyles.body.copyWith(color: AppColors.rouge)),
               ],
             ),
           ),

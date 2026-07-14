@@ -75,9 +75,13 @@ class NotificationService {
   }
 
   //recuperation asynchrone pour eviter de bloquer l interface
+  //note : si l uid est absent (pas encore connecte), on ne fait rien
+  //le token sera sauvegarde via saveTokenForCurrentUser() appele par AuthNotifier
   static void _fetchAndSaveTokenInBackground() {
     _messaging.getToken().then((token) {
-      if (token != null) _saveToken(token);
+      if (token == null) return;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) _saveToken(token);
     }).catchError((_) {
       //echec silencieux si pas de reseau au demarrage
     });

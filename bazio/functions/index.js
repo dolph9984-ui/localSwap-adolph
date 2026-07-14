@@ -8,41 +8,39 @@ initializeApp();
 
 const db = getFirestore();
 
-// ════════════════════════════════════════════════════════════════════════
-// HELPER — Écrire la notif dans Firestore + envoyer le push FCM
-// ════════════════════════════════════════════════════════════════════════
+async function sendNotification({ recipientUid, type, title, body, routePath, chatId }) {
+  const notifRef = chatId
+    ? db.collection("users").doc(recipientUid).collection("notifications").doc(chatId)
+    : db.collection("users").doc(recipientUid).collection("notifications").doc();
 
-async function sendNotification({ recipientUid, type, title, body, routePath }) {
-  // 1. Écrire dans users/{uid}/notifications  →  alimente le badge in-app
-  await db
-    .collection("users")
-    .doc(recipientUid)
-    .collection("notifications")
-    .add({
-      type,        // "message" | "review"
-      title,
-      body,
-      routePath,
-      isRead: false,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+  await notifRef.set({
+    type,
+    title,
+    body,
+    routePath,
+    isRead: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
 
-  // 2. Récupérer le token FCM du destinataire
   const userSnap = await db.collection("users").doc(recipientUid).get();
   const fcmToken = userSnap.data()?.fcmToken;
-  if (!fcmToken) return; // pas de token → la notif in-app suffit
+  if (!fcmToken) return;
 
-  // 3. Envoyer le push FCM
+  const data = { routePath: routePath ?? "" };
+  if (chatId) data.chatId = chatId;
+
   try {
     await getMessaging().send({
       token: fcmToken,
       notification: { title, body },
-      data: { routePath: routePath ?? "" },
+      data,
       android: {
+        collapseKey: chatId ?? type,  // ✅ bonne place
         priority: "high",
         notification: {
           channelId: "bazio_main",
           sound: "default",
+          tag: chatId ?? type,
         },
       },
       apns: {
@@ -52,7 +50,6 @@ async function sendNotification({ recipientUid, type, title, body, routePath }) 
       },
     });
   } catch (err) {
-    // Token invalide/expiré → le supprimer
     if (
       err.code === "messaging/registration-token-not-registered" ||
       err.code === "messaging/invalid-registration-token"
@@ -65,24 +62,17 @@ async function sendNotification({ recipientUid, type, title, body, routePath }) 
   }
 }
 
-// ════════════════════════════════════════════════════════════════════════
-// TRIGGER 1 — Nouveau message dans une conversation
-// Chemin : chats/{chatId}/messages/{messageId}
-// ════════════════════════════════════════════════════════════════════════
-
 exports.onNewMessage = onDocumentCreated(
   "chats/{chatId}/messages/{messageId}",
   async (event) => {
     const messageData = event.data.data();
     const { chatId } = event.params;
 
-    // Ignorer les messages système (vendu / remis en vente)
     if (messageData.isSystem === true) return;
 
     const senderId = messageData.senderId;
     const text = messageData.text ?? "";
 
-    // Récupérer la conversation pour trouver le destinataire
     const chatSnap = await db.collection("chats").doc(chatId).get();
     if (!chatSnap.exists) return;
 
@@ -90,31 +80,24 @@ exports.onNewMessage = onDocumentCreated(
     const participants = chatData.participants ?? [];
     const listingTitle = chatData.listingTitle ?? "Annonce";
 
-    // Le destinataire = l'autre participant
     const recipientUid = participants.find((uid) => uid !== senderId);
     if (!recipientUid) return;
 
-    // Récupérer le nom de l'expéditeur
     const senderSnap = await db.collection("users").doc(senderId).get();
     const senderName = senderSnap.data()?.name ?? "Quelqu'un";
 
-    // Tronquer le message si trop long
     const preview = text.length > 60 ? text.substring(0, 60) + "…" : text;
 
     await sendNotification({
       recipientUid,
       type: "message",
-      title: senderName,
-      body: preview || "Nouveau message",
+      title: listingTitle,
+      body: `${senderName} : ${preview || "Nouveau message"}`,
       routePath: `/messages/${chatId}?listingTitle=${encodeURIComponent(listingTitle)}`,
+      chatId, // <- transmis pour grouper les notifs
     });
   }
 );
-
-// ════════════════════════════════════════════════════════════════════════
-// TRIGGER 2 — Nouvel avis sur un vendeur
-// Chemin : users/{sellerId}/reviews/{reviewId}
-// ════════════════════════════════════════════════════════════════════════
 
 exports.onNewReview = onDocumentCreated(
   "users/{sellerId}/reviews/{reviewId}",
@@ -126,7 +109,6 @@ exports.onNewReview = onDocumentCreated(
     const rating = reviewData.rating ?? 0;
     const listingTitle = reviewData.listingTitle ?? "votre annonce";
 
-    // Étoiles en texte  ex: ★★★★☆
     const stars = "★".repeat(rating) + "☆".repeat(Math.max(0, 5 - rating));
 
     await sendNotification({
@@ -139,11 +121,6 @@ exports.onNewReview = onDocumentCreated(
   }
 );
 
-// ════════════════════════════════════════════════════════════════════════
-// TRIGGER 3 — Suppression d'un utilisateur (cascade)
-// Chemin : users/{uid}
-// ════════════════════════════════════════════════════════════════════════
-
 exports.onUserDeleted = onDocumentDeleted(
   { document: "users/{uid}" },
   async (event) => {
@@ -152,7 +129,6 @@ exports.onUserDeleted = onDocumentDeleted(
 
     const bucket = getStorage().bucket();
 
-    // 1. Récupérer toutes les annonces du vendeur
     const listingsSnap = await db
       .collection("listings")
       .where("sellerId", "==", uid)
@@ -160,7 +136,6 @@ exports.onUserDeleted = onDocumentDeleted(
 
     console.log(`[onUserDeleted] ${listingsSnap.size} annonce(s) trouvée(s)`);
 
-    // 2. Supprimer le dossier listings/{uid}/ dans Firebase Storage
     try {
       await bucket.deleteFiles({ prefix: `listings/${uid}/` });
       console.log(`[onUserDeleted] Dossier listings/${uid}/ supprimé`);
@@ -168,7 +143,6 @@ exports.onUserDeleted = onDocumentDeleted(
       console.error("[onUserDeleted] Erreur suppression Storage :", e.message);
     }
 
-    // 3. Supprimer les annonces Firestore en batch
     const BATCH_LIMIT = 500;
     const listingDocs = listingsSnap.docs;
 
@@ -182,7 +156,6 @@ exports.onUserDeleted = onDocumentDeleted(
 
     console.log(`[onUserDeleted] Annonces supprimées`);
 
-    // 4. Supprimer la sous-collection favorites
     const favSnap = await db
       .collection("users")
       .doc(uid)

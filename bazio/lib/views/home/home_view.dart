@@ -11,10 +11,9 @@ import 'package:bazio/views/home/widget/section_helper.dart';
 import 'package:bazio/views/search/widget/search_bar_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 
-//focus node global pour la barre de recherche accessible depuis _SearchBarSliver
-final _searchFocusNode = FocusNode();
 
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
@@ -116,10 +115,9 @@ class _HomeHeader extends ConsumerWidget {
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  const Icon(
-                    Icons.notifications_none_rounded,
-                    color: AppColors.blackB,
-                    size: 28,
+                  SvgPicture.asset(
+                    'assets/icones/notification.svg',
+                    colorFilter: const ColorFilter.mode(AppColors.blackB, BlendMode.srcIn),
                   ),
                   if (unreadNotifs > 0)
                     Positioned(
@@ -170,9 +168,7 @@ class _SearchBarSliver extends ConsumerWidget {
           behavior: HitTestBehavior.opaque,
           onTap: () {
             ref.read(navigationIndexProvider.notifier).setIndex(1);
-            WidgetsBinding.instance.addPostFrameCallback(
-              (_) => _searchFocusNode.requestFocus(),
-            );
+            ref.read(searchFocusTriggerProvider.notifier).trigger();
           },
           child: AbsorbPointer(
             child: SearchBarWidget(

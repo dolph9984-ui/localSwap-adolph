@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'package:bazio/core/constants/colors.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:bazio/core/router/app_router.dart';
 import 'package:bazio/model/listing/draft_model.dart';
 import 'package:bazio/services/notification/notification_service.dart';
+import 'package:bazio/viewmodels/auth/auth_notifier.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,10 +28,20 @@ class AppImageCacheManager extends CacheManager with ImageCacheManager {
         ));
 }
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  //initialisation des locales pour afficher les dates en francais
+  await initializeDateFormatting('fr');
+
   await Firebase.initializeApp();
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   //optimisation firestore : persistance activee et limitee a 50mo
   FirebaseFirestore.instance.settings = const Settings(
@@ -68,11 +81,16 @@ void main() async {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    //on force l'initialisation du provider auth des le demarrage de l'app
+    //sans ca, le listener userChanges dans AuthNotifier ne tourne pas
+    //et le token fcm n'est jamais sauvegarde pour les sessions persistantes
+    ref.watch(authProvider);
+
     return MaterialApp.router(
       title: 'Bazio',
       routerConfig: appRouter,

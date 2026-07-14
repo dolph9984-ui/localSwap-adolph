@@ -29,12 +29,12 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
-  final _cityController = TextEditingController();
   File? _pickedImage;
 
-  //coordonnees GPS en attente avant sauvegarde
+  // coordonnees GPS et ville en attente avant sauvegarde
   double? _pendingLat;
   double? _pendingLng;
+  String? _pendingCity;
   bool _gpsCleared = false;
 
   UserLocationState? _originalLocationState;
@@ -43,20 +43,21 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
   void initState() {
     super.initState();
 
-    //nom depuis authProvider sans aller chercher Firebase directement
+    // nom depuis authProvider sans aller chercher Firebase directement
     final user = ref.read(authProvider);
     _nameController.text = user?.displayName ?? '';
 
     final currentLoc = ref.read(userLocationProvider).value;
-    _cityController.text = currentLoc?.city ?? '';
     _originalLocationState = currentLoc;
 
+    // on precharge les coords en attente si deja definies
     if (currentLoc != null && currentLoc.hasPosition) {
       _pendingLat = currentLoc.latitude;
       _pendingLng = currentLoc.longitude;
+      _pendingCity = currentLoc.city;
     }
 
-    //le telephone est charge depuis Firestore via le ViewModel
+    // le telephone est charge depuis Firestore via le ViewModel
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await ref.read(profileSettingsProvider.notifier).loadPhone();
       final phone = ref.read(profileSettingsProvider).phone;
@@ -68,7 +69,7 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
 
   @override
   void dispose() {
-    //si on quitte sans sauvegarder on restaure la localisation d'origine
+    // si on quitte sans sauvegarder on restaure la localisation d'origine
     final isSaved = ref.read(profileSettingsProvider).isSaved;
     if (!isSaved && _originalLocationState != null) {
       ref
@@ -77,7 +78,6 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
     }
     _nameController.dispose();
     _phoneController.dispose();
-    _cityController.dispose();
     super.dispose();
   }
 
@@ -92,12 +92,17 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? true)) return;
+
+    // la ville vient du GPS, pas d'un champ texte
+    // si le GPS est reinitialise, la ville l'est aussi car elle en depend
+    final cityToSave = _gpsCleared ? '' : (_pendingCity ?? _originalLocationState?.city ?? '');
+
     try {
       await ref.read(profileSettingsProvider.notifier).saveProfile(
             name: _nameController.text,
             phone: _phoneController.text,
             pickedImage: _pickedImage,
-            city: _cityController.text.trim(),
+            city: cityToSave,
             pendingLat: _pendingLat,
             pendingLng: _pendingLng,
             gpsCleared: _gpsCleared,
@@ -106,7 +111,7 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
       if (mounted) {
         setState(() => _pickedImage = null);
         showAppSnackBar(context,
-            message: 'Profil mis à jour avec succès !',
+            message: 'Profil mis a jour avec succes !',
             type: SnackType.success);
       }
     } catch (e) {
@@ -130,14 +135,14 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               CustomAppBar(
-                title: 'Paramètres du profil',
-                subtitle: 'Gérez vos informations personnelles',
+                title: 'Parametres du profil',
+                subtitle: 'Gerez vos informations personnelles',
                 onBack: () => Navigator.pop(context),
               ),
 
               AppSpacing.vLarge,
 
-              //avatar cliquable pour changer la photo
+              // avatar cliquable pour changer la photo
               Center(
                 child: GestureDetector(
                   onTap: isSaving ? null : _pickPhoto,
@@ -145,8 +150,7 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
                     children: [
                       CircleAvatar(
                         radius: 52,
-                        backgroundColor:
-                            AppColors.primary.withOpacity(0.12),
+                        backgroundColor: AppColors.primary.withOpacity(0.12),
                         backgroundImage: _pickedImage != null
                             ? FileImage(_pickedImage!) as ImageProvider
                             : (networkPhotoUrl != null
@@ -209,10 +213,10 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
                       controller: _phoneController,
                       keyboardType: TextInputType.phone,
                       enabled: !isSaving,
-                      maxLength: 13, //format +261XXXXXXXXX = 13 caracteres
+                      maxLength: 13, // format +261XXXXXXXXX = 13 caracteres
                       decoration: AppInputDecoration.defaultStyle(
                         hint: '0341234567',
-                        label: 'Téléphone',
+                        label: 'Telephone',
                       ).copyWith(counterText: ''),
                       validator: (v) => Validators.phoneError(v ?? ''),
                     ),
@@ -222,16 +226,19 @@ class _ProfileSettingsViewState extends ConsumerState<ProfileSettingsView> {
 
               AppSpacing.vLarge,
 
+              // LocationSection sans cityController
+              // le callback recoit maintenant aussi la ville deduite du GPS
               LocationSection(
-                cityController: _cityController,
-                onGpsAcquired: (lat, lng) {
+                onGpsAcquired: (lat, lng, city) {
                   _pendingLat = lat;
                   _pendingLng = lng;
+                  _pendingCity = city;
                   _gpsCleared = false;
                 },
                 onGpsCleared: () {
                   _pendingLat = null;
                   _pendingLng = null;
+                  _pendingCity = null;
                   _gpsCleared = true;
                 },
               ),

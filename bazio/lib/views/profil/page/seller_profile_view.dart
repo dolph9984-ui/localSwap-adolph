@@ -62,7 +62,7 @@ class _SellerProfileViewState extends ConsumerState<SellerProfileView>
                   const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: CustomAppBar(
                 title: widget.listingTitle ?? widget.sellerName,
-                subtitle: 'Vendeur',
+                subtitle: 'Profil',
                 onBack: () => context.pop(),
               ),
             ),

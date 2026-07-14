@@ -9,6 +9,7 @@ import 'package:bazio/views/search/widget/search_history_widget.dart';
 import 'package:bazio/views/search/widget/search_results_grid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:bazio/core/router/main_wrapper.dart';
 import 'package:go_router/go_router.dart';
 
 class SearchView extends ConsumerStatefulWidget {
@@ -27,6 +28,12 @@ class _SearchViewState extends ConsumerState<SearchView> {
     super.initState();
     _focusNode.addListener(_rebuild);
     _controller.addListener(_rebuild);
+    // ecoute le trigger depuis la home pour activer le clavier
+    ref.listenManual(searchFocusTriggerProvider, (_, __) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (mounted) _focusNode.requestFocus();
+      });
+    });
   }
 
   //rebuild minimal pour mettre a jour l'affichage selon le focus et le texte

@@ -9,6 +9,7 @@ import 'package:bazio/viewmodels/auth/auth_notifier.dart';
 import 'package:bazio/viewmodels/messaging/chat_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 
 class ListingBottomBar extends ConsumerWidget {
@@ -317,6 +318,7 @@ class _ChatButtonState extends ConsumerState<_ChatButton> {
       child: Container(
         width: 56,
         height: 56,
+        padding: const EdgeInsets.all(5), // Ajuste cette valeur (ex: 12, 16, 20) selon tes besoins
         decoration: const BoxDecoration(
           color: AppColors.cardBg,
           shape: BoxShape.circle,
@@ -329,8 +331,13 @@ class _ChatButtonState extends ConsumerState<_ChatButton> {
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               )
-            : const Icon(Icons.chat_bubble_outline, color: AppColors.bleu),
+            : SvgPicture.asset(
+                'assets/icones/message_outline.svg',
+                colorFilter: const ColorFilter.mode(AppColors.bleu, BlendMode.srcIn),
+              ),
       ),
+
+     
     );
   }
 }

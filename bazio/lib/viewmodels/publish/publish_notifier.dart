@@ -9,6 +9,7 @@ import 'package:bazio/viewmodels/auth/auth_notifier.dart';
 import 'package:bazio/viewmodels/listing/listing_providers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -22,7 +23,7 @@ class PublishNotifier extends Notifier<PublishState> {
     return const PublishState();
   }
 
-  //on remplit le state avec les infos d'une annonce pour la modif
+  // on remplit le state avec les infos d'une annonce pour la modif
   void loadFromListing(ListingModel listing) {
     state = PublishState(
       imageItems: const [],
@@ -55,7 +56,7 @@ class PublishNotifier extends Notifier<PublishState> {
     state = state.copyWith(existingImageUrls: updated);
   }
 
-  //selection de plusieurs images avec limite de nombre et de poids
+  // selection de plusieurs images avec limite de nombre et de poids
   Future<void> pickImages() async {
     final picked = await _picker.pickMultiImage(imageQuality: 80);
     if (picked.isEmpty) return;
@@ -67,7 +68,9 @@ class PublishNotifier extends Notifier<PublishState> {
     for (final file in picked) {
       if (valid.length + totalExisting >= ListingConstants.maxImages) break;
       final bytes = await file.length();
-      if (bytes > ListingConstants.maxFileSizeBytes) throw '"${file.name}" dépasse 5 MB';
+      if (bytes > ListingConstants.maxFileSizeBytes) {
+        throw '"${file.name}" depasse 5 MB';
+      }
       valid.add(file);
     }
 
@@ -83,35 +86,57 @@ class PublishNotifier extends Notifier<PublishState> {
     state = state.copyWith(imageItems: updated);
   }
 
-  void setCity(String city) => state = state.copyWith(city: city);
-
-  //on recupere les coordonnees gps actuelles
+  // recupere le GPS et deduit la ville automatiquement via reverse geocoding
   Future<void> getCurrentLocation() async {
     state = state.copyWith(isLocating: true);
     try {
       final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) throw 'Localisation désactivée';
+      if (!enabled) throw 'Localisation desactivee';
 
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) throw 'Permission refusée';
+        if (permission == LocationPermission.denied) throw 'Permission refusee';
       }
       if (permission == LocationPermission.deniedForever) {
-        throw 'Active la localisation dans les paramètres';
+        throw 'Active la localisation dans les parametres';
       }
 
       final pos = await Geolocator.getCurrentPosition();
-      state = state.copyWith(position: pos, isLocating: false);
+
+      // reverse geocoding natif (Google sur Android, Apple sur iOS) - pas de cle API
+      final city = await _cityFromCoordinates(pos.latitude, pos.longitude);
+
+      state = state.copyWith(
+        position: pos,
+        city: city,
+        isLocating: false,
+      );
     } catch (e) {
       state = state.copyWith(isLocating: false);
       rethrow;
     }
   }
 
-  void clearLocation() => state = state.copyWith(clearPosition: true);
+  // deduit la ville depuis les coordonnees GPS via le geocoding natif du telephone
+  Future<String?> _cityFromCoordinates(double lat, double lng) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(lat, lng);
+      if (placemarks.isEmpty) return null;
+      final place = placemarks.first;
+      // locality = ville, subAdministrativeArea = region en fallback
+      return place.locality ?? place.subAdministrativeArea;
+    } catch (_) {
+      // si le geocoding echoue (offline, etc.) on renvoie null sans planter
+      return null;
+    }
+  }
 
-  //permet de reprendre la ou on s'etait arrete avec un brouillon
+  void clearLocation() {
+    state = state.copyWith(clearPosition: true, clearCity: true);
+  }
+
+  // permet de reprendre la ou on s'etait arrete avec un brouillon
   void restoreFromDraft({
     required List<String> imagePaths,
     double? latitude,
@@ -146,7 +171,7 @@ class PublishNotifier extends Notifier<PublishState> {
     state = state.copyWith(imageItems: items, position: pos, city: city);
   }
 
-  //gere l'upload des images et la creation/maj de l'annonce
+  // gere l'upload des images et la creation/maj de l'annonce
   Future<void> publishListing({
     required String title,
     required String description,
@@ -163,34 +188,34 @@ class PublishNotifier extends Notifier<PublishState> {
   }) async {
     if (title.isEmpty) throw 'Titre requis';
     if (price <= 0) throw 'Prix invalide';
-    if (state.city == null) throw 'Choisis une ville';
+    if (state.city == null) throw 'La localisation GPS est requise';
 
-    //on check la connexion avant de lancer l'upload
+    // on check la connexion avant de lancer l'upload
     try {
       final result = await InternetAddress.lookup(
         'google.com',
       ).timeout(const Duration(seconds: 4));
       if (result.isEmpty || result.first.rawAddress.isEmpty) {
-        throw 'Pas de connexion Internet. Vérifiez votre réseau et réessayez.';
+        throw 'Pas de connexion Internet. Verifiez votre reseau et reessayez.';
       }
     } on SocketException {
-      throw 'Pas de connexion Internet. Vérifiez votre réseau et réessayez.';
+      throw 'Pas de connexion Internet. Verifiez votre reseau et reessayez.';
     } on TimeoutException {
-      throw 'Connexion trop lente. Vérifiez votre réseau et réessayez.';
+      throw 'Connexion trop lente. Verifiez votre reseau et reessayez.';
     }
 
     state = state.copyWith(isLoading: true);
 
     try {
       final user = ref.read(authProvider);
-      if (user == null) throw 'Non connecté';
+      if (user == null) throw 'Non connecte';
 
       List<String> newUrls = [];
 
       if (state.imageItems.isNotEmpty) {
         state = state.copyWith(isUploading: true);
 
-        //upload des images avec maj de la barre de progression
+        // upload des images avec maj de la barre de progression
         newUrls = await _service.uploadImagesWithProgress(
           state.imageItems.map((e) => e.file).toList(),
           user.uid,
@@ -267,7 +292,6 @@ class PublishNotifier extends Notifier<PublishState> {
         );
         await _service.createListing(listing);
       }
-
     } catch (e) {
       state = state.copyWith(isLoading: false, isUploading: false);
       throw humanizeError(e);
@@ -277,5 +301,5 @@ class PublishNotifier extends Notifier<PublishState> {
 
 final publishProvider =
     NotifierProvider.autoDispose<PublishNotifier, PublishState>(
-      PublishNotifier.new,
-    );
+  PublishNotifier.new,
+);

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:bazio/core/constants/colors.dart';
 import 'package:bazio/viewmodels/messaging/chat_notifier.dart';
 import 'package:bazio/views/home/home_view.dart';
@@ -8,6 +9,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
+// trigger pour activer le clavier de recherche depuis n'importe quelle page
+class SearchFocusTriggerNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void trigger() => state++;
+}
+
+final searchFocusTriggerProvider =
+    NotifierProvider<SearchFocusTriggerNotifier, int>(SearchFocusTriggerNotifier.new);
 
 //on gere l'index de la navigation ici pour savoir quelle page afficher
 class NavigationNotifier extends Notifier<int> {
@@ -45,7 +57,24 @@ class MainWrapper extends ConsumerWidget {
         children: [
           IndexedStack(index: index, children: pages),
 
-          if (!keyboardVisible)
+          if (!keyboardVisible) ...[ 
+
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 100,
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 6.0, sigmaY: 6.0),
+                  child: Container(
+                    // Un très léger voile clair pour adoucir les éléments en arrière-plan
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                ),
+              ),
+            ),
+
             Align(
               alignment: Alignment.bottomCenter,
               //on bloque les clics fantomes derriere la navbar
@@ -55,6 +84,7 @@ class MainWrapper extends ConsumerWidget {
                 child: _buildCustomBottomBar(context, ref, index, unreadChats),
               ),
             ),
+          ],
         ],
       ),
     );

@@ -1,23 +1,20 @@
 import 'package:bazio/core/constants/colors.dart';
-import 'package:bazio/core/constants/madagascar_cities.dart';
 import 'package:bazio/core/constants/spacing.dart';
 import 'package:bazio/core/constants/text_styles.dart';
 import 'package:bazio/viewmodels/location/user_location_notifier.dart';
-import 'package:bazio/views/publish/widget/city_search_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class LocationSection extends ConsumerStatefulWidget {
-  final TextEditingController cityController;
-
-  //callbacks pour transmettre les coordonnees GPS temporaires au parent
-  final void Function(double lat, double lng)? onGpsAcquired;
+  // callbacks pour transmettre les coordonnees GPS et la ville au parent
+  final void Function(double lat, double lng, String city)? onGpsAcquired;
   final void Function()? onGpsCleared;
 
   const LocationSection({
     super.key,
-    required this.cityController,
     this.onGpsAcquired,
     this.onGpsCleared,
   });
@@ -31,20 +28,22 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
 
   static const _defaultTarget = LatLng(-18.8792, 47.5079);
 
-  //coordonnees temporaires locales qui ne modifient pas l'etat global avant sauvegarde
+  // coordonnees et ville temporaires, ne modifient pas l'etat global avant sauvegarde
   double? _tempLat;
   double? _tempLng;
+  String? _tempCity;
   bool _isLocating = false;
   String? _gpsError;
 
   @override
   void initState() {
     super.initState();
-    //on precharge les coords depuis l'etat en memoire si dispo
+    // on precharge les coords et la ville depuis l'etat en memoire si dispo
     final loc = ref.read(userLocationProvider).value;
     if (loc != null && loc.hasPosition) {
       _tempLat = loc.latitude;
       _tempLng = loc.longitude;
+      _tempCity = loc.city;
     }
   }
 
@@ -62,35 +61,73 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
       _gpsError = null;
     });
 
-    final notifier = ref.read(userLocationProvider.notifier);
-    final result = await notifier.fetchLocationPreview();
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) throw 'Localisation desactivee';
 
-    if (!mounted) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw 'Impossible de recuperer la position. Verifiez les permissions.';
+      }
 
-    if (result == null) {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+        ),
+      );
+
+      // reverse geocoding natif - pas de cle API requise
+      final city = await _cityFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _tempLat = position.latitude;
+        _tempLng = position.longitude;
+        _tempCity = city;
+        _isLocating = false;
+      });
+
+      _moveCamera(position.latitude, position.longitude, 15);
+
+      // on notifie le parent avec les coords ET la ville deduite
+      if (city != null) {
+        widget.onGpsAcquired?.call(position.latitude, position.longitude, city);
+      }
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLocating = false;
-        _gpsError = 'Impossible de récupérer la position. Vérifiez les permissions.';
+        _gpsError = e.toString();
       });
-      return;
     }
+  }
 
-    setState(() {
-      _tempLat = result.latitude;
-      _tempLng = result.longitude;
-      _isLocating = false;
-    });
-
-    _moveCamera(result.latitude, result.longitude, 15);
-
-    //on notifie le parent pour qu'il stocke les coords jusqu'a la sauvegarde
-    widget.onGpsAcquired?.call(result.latitude, result.longitude);
+  // deduit la ville depuis les coordonnees GPS via le geocoding natif du telephone
+  Future<String?> _cityFromCoordinates(double lat, double lng) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(lat, lng);
+      if (placemarks.isEmpty) return null;
+      final place = placemarks.first;
+      // locality = ville, subAdministrativeArea = region en fallback
+      return place.locality ?? place.subAdministrativeArea;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _clearGps() {
     setState(() {
       _tempLat = null;
       _tempLng = null;
+      _tempCity = null;
       _gpsError = null;
     });
     _moveCamera(_defaultTarget.latitude, _defaultTarget.longitude, 12);
@@ -104,22 +141,18 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Localisation', style: AppTextStyles.bodyBold),
-          ],
-        ),
+        Text('Localisation', style: AppTextStyles.bodyBold),
         AppSpacing.vSmall,
 
-        CitySearchField(
-          cities: madagascarCities,
-          controller: widget.cityController,
+        // badge ville detectee (remplace le CitySearchField)
+        _CityDetectedBadge(
+          city: _tempCity,
+          isLocating: _isLocating,
         ),
 
         AppSpacing.vSmall,
 
-        //bordure verte si une position GPS est definie
+        // carte Google Maps
         Container(
           height: 220,
           decoration: BoxDecoration(
@@ -186,7 +219,7 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
               label: Text(hasPosition ? 'Actualiser' : 'Me localiser'),
             ),
 
-            //bouton reinitialiser visible seulement si une position est definie
+            // bouton reinitialiser visible seulement si une position est definie
             if (hasPosition)
               TextButton.icon(
                 style: TextButton.styleFrom(
@@ -194,7 +227,7 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
                 ),
                 onPressed: _clearGps,
                 icon: Icon(Icons.close, color: Colors.grey.shade600),
-                label: const Text('Réinitialiser'),
+                label: const Text('Reinitialiser'),
               ),
           ],
         ),
@@ -208,6 +241,103 @@ class _LocationSectionState extends ConsumerState<LocationSection> {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _CityDetectedBadge extends StatelessWidget {
+  final String? city;
+  final bool isLocating;
+
+  const _CityDetectedBadge({this.city, required this.isLocating});
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLocating) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.grey.shade500,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Detection de la ville en cours...',
+              style: AppTextStyles.body.copyWith(color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (city == null) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.location_off_outlined,
+                color: Colors.grey.shade400, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Aucune localisation definie',
+                style:
+                    AppTextStyles.body.copyWith(color: Colors.grey.shade500),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.location_on_rounded, color: AppColors.primary, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  city!,
+                  style: AppTextStyles.bodyBold
+                      .copyWith(color: AppColors.primary),
+                ),
+                Text(
+                  'Detectee automatiquement via GPS',
+                  style: AppTextStyles.caption
+                      .copyWith(color: Colors.green.shade600),
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.check_circle_outline_rounded,
+              color: Colors.green.shade400, size: 18),
+        ],
+      ),
     );
   }
 }
